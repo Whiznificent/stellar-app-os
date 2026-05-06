@@ -2,8 +2,8 @@ declare module 'snarkjs' {
   export const groth16: {
     fullProve: (
       input: Record<string, unknown>,
-      wasm: Uint8Array,
-      zkey: Uint8Array
+      wasm: string | Uint8Array,
+      zkey: string | Uint8Array
     ) => Promise<{
       proof: {
         pi_a: string[];

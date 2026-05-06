@@ -46,11 +46,7 @@ impl NullifierRegistry {
     }
 
     /// Register a tree commitment on-chain with optional expiry.
-    pub fn register(
-        env: Env,
-        input: TreeCommitmentInput,
-        expires_at: Option<u64>,
-    ) -> BytesN<32> {
+    pub fn register(env: Env, input: TreeCommitmentInput, expires_at: Option<u64>) -> BytesN<32> {
         input.farmer_id.require_auth();
 
         let commitment = Self::_compute_commitment(&env, &input);
@@ -453,4 +449,3 @@ mod tests {
         assert!(client.is_registered(&c2));
     }
 }
-

@@ -138,7 +138,8 @@ impl NairaPayout {
 
         let now = env.ledger().timestamp();
 
-        let last_payout_key = (Symbol::new(&env, "LastPayoutTime"), farmer.clone()).into_val(&env);
+        let last_payout_key: soroban_sdk::Val =
+            (Symbol::new(&env, "LastPayoutTime"), farmer.clone()).into_val(&env);
         if env.storage().persistent().has(&last_payout_key) {
             let last_payout_time: u64 = env.storage().persistent().get(&last_payout_key).unwrap();
             if now < last_payout_time + min_interval {
@@ -194,9 +195,10 @@ impl NairaPayout {
 
         env.storage().persistent().set(&key, &record);
         env.storage().persistent().set(&last_payout_key, &now);
-        env.storage()
-            .instance()
-            .set(&daily_total_key, &(current_total + usdc_amount, current_day));
+        env.storage().instance().set(
+            &daily_total_key,
+            &(current_total + usdc_amount, current_day),
+        );
 
         env.events().publish(
             (symbol_short!("initpay"), farmer),
@@ -282,7 +284,8 @@ impl NairaPayout {
 
     pub fn reset_address_payout_time(env: Env, address: Address) {
         Self::require_admin(&env);
-        let last_payout_key = (Symbol::new(&env, "LastPayoutTime"), address).into_val(&env);
+        let last_payout_key: soroban_sdk::Val =
+            (Symbol::new(&env, "LastPayoutTime"), address).into_val(&env);
         env.storage().persistent().remove(&last_payout_key);
     }
 
@@ -664,7 +667,6 @@ mod tests {
         );
     }
 
-    
     #[test]
     fn test_admin_reset_limits() {
         let Ctx {

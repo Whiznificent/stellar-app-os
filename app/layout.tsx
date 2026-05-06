@@ -80,17 +80,15 @@ export default function RootLayout({
           `}
         </Script>
         <QueryProvider>
-        <WalletProviderWrapper>
-          <FavoritesProvider>
-        
-            <ToastProvider>
-              <CookieBanner />
-              <Header />
-              {children}
-              <Footer />
-            </ToastProvider>
-          </FavoritesProvider>
-        
+          <WalletProviderWrapper>
+            <FavoritesProvider>
+              <ToastProvider>
+                <CookieBanner />
+                <Header />
+                {children}
+                <Footer />
+              </ToastProvider>
+            </FavoritesProvider>
           </WalletProviderWrapper>
         </QueryProvider>
       </body>
