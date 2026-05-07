@@ -328,6 +328,7 @@ mod tests {
     fn setup() -> Ctx {
         let env = Env::default();
         env.mock_all_auths();
+        env.ledger().with_mut(|l| l.timestamp = 1);
 
         let contract_id = env.register_contract(None, NairaPayout);
         let client = NairaPayoutClient::new(&env, &contract_id);
@@ -690,6 +691,7 @@ mod tests {
             &dummy_hash(&env, 1),
         );
 
+        client.cancel_payout(&farmer);
         client.reset_address_payout_time(&farmer);
 
         client.initiate_payout(

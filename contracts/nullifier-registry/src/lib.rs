@@ -139,7 +139,10 @@ impl NullifierRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use soroban_sdk::{testutils::Address as _, Address, Env, String};
+    use soroban_sdk::{
+        testutils::{Address as _, Ledger},
+        Address, Env, String,
+    };
 
     fn setup() -> (Env, Address, NullifierRegistryClient<'static>) {
         let env = Env::default();
