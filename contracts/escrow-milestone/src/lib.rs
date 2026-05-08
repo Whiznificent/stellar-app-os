@@ -1,6 +1,5 @@
 #![no_std]
 
-//! Escrow Milestone Release Contract — Closes #392
 //!
 //! Flow:
 //!   1. Funder deposits XLM/token into escrow via `deposit()`
@@ -63,9 +62,9 @@ pub struct EscrowState {
     pub total_amount: i128,
     pub released: i128,
     pub status: EscrowStatus,
-    pub verification_hash: BytesN<32>,
+    pub verification_hash: OptProof,
     pub milestone1_verified_at: u64,
-    pub survival_verification_hash: BytesN<32>,
+    pub survival_verification_hash: OptProof,
     pub survival_rate_percent: u32,
     /// The arbiter that can adjudicate disputes for this escrow
     pub arbiter: Address,
@@ -113,23 +112,20 @@ impl EscrowMilestone {
             &amount,
         );
 
-        let empty_hash = BytesN::from_array(&env, &[0; 32]);
-        let state = EscrowState {
+        env.storage().persistent().set(&key, &EscrowState {
             farmer: farmer.clone(),
             funder,
             token,
             total_amount: amount,
             released: 0,
             status: EscrowStatus::Funded,
-            verification_hash: empty_hash.clone(),
+            verification_hash: OptProof::None,
             milestone1_verified_at: 0,
-            survival_verification_hash: empty_hash,
+            survival_verification_hash: OptProof::None,
             survival_rate_percent: 0,
             arbiter,
             dispute_open: false,
-        };
-
-        env.storage().persistent().set(&key, &state);
+        });
 
         env.events()
             .publish((symbol_short!("deposit"), farmer), amount);
@@ -221,7 +217,7 @@ impl EscrowMilestone {
 
         state.released = release_amount;
         state.status = EscrowStatus::Milestone1Released;
-        state.verification_hash = verification_hash.clone();
+        state.verification_hash = OptProof::Some(verification_hash);
         state.milestone1_verified_at = env.ledger().timestamp();
 
         env.storage().persistent().set(&key, &state);
@@ -272,15 +268,12 @@ impl EscrowMilestone {
             panic!("nothing left to release");
         }
 
-        token::Client::new(&env, &state.token).transfer(
-            &env.current_contract_address(),
-            &state.farmer,
-            &remainder,
-        );
+        token::Client::new(&env, &state.token)
+            .transfer(&env.current_contract_address(), &state.farmer, &remainder);
 
         state.released += remainder;
         state.status = EscrowStatus::Completed;
-        state.survival_verification_hash = survival_verification_hash;
+        state.survival_verification_hash = OptProof::Some(survival_verification_hash);
         state.survival_rate_percent = survival_rate_percent;
 
         env.storage().persistent().set(&key, &state);
@@ -441,35 +434,45 @@ mod tests {
         token, Address, BytesN, Env,
     };
 
-    fn setup() -> (
-        Env,
-        Address, // admin
-        Address, // funder
-        Address, // farmer
-        Address, // arbiter
-        Address, // token
-        EscrowMilestoneClient<'static>,
-    ) {
+    struct Ctx {
+        env: Env,
+        admin: Address,
+        arbiter: Address,
+        client: EscrowMilestoneClient<'static>,
+        token: Address,
+        funder: Address,
+        farmer: Address,
+        contract: Address,
+    }
+
+    fn setup() -> Ctx {
         let env = Env::default();
         env.mock_all_auths();
 
-        let contract_id = env.register_contract(None, EscrowMilestone);
-        let client = EscrowMilestoneClient::new(&env, &contract_id);
+        let contract = env.register_contract(None, EscrowMilestone);
+        let client = EscrowMilestoneClient::new(&env, &contract);
 
         let admin = Address::generate(&env);
         let funder = Address::generate(&env);
         let farmer = Address::generate(&env);
         let arbiter = Address::generate(&env);
-
-        let token_id = env
+        let token = env
             .register_stellar_asset_contract_v2(admin.clone())
             .address();
-        let token_admin = token::StellarAssetClient::new(&env, &token_id);
-        token_admin.mint(&funder, &10_000);
+        token::StellarAssetClient::new(&env, &token).mint(&funder, &20_000);
 
         client.initialize(&admin);
 
-        (env, admin, funder, farmer, arbiter, token_id, client)
+        Ctx {
+            env,
+            admin,
+            arbiter,
+            client,
+            token,
+            funder,
+            farmer,
+            contract,
+        }
     }
 
     fn dummy_hash(env: &Env, seed: u8) -> BytesN<32> {
@@ -482,10 +485,18 @@ mod tests {
 
     #[test]
     fn test_full_lifecycle_with_balances() {
-        let (env, _admin, funder, farmer, arbiter, token, client) = setup();
-        let contract = client.address.clone();
+        let Ctx {
+            env,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            contract,
+            ..
+        } = setup();
 
-        assert_eq!(balance(&env, &token, &funder), 10_000);
+        assert_eq!(balance(&env, &token, &funder), 20_000);
         assert_eq!(balance(&env, &token, &contract), 0);
         assert_eq!(balance(&env, &token, &farmer), 0);
 
@@ -495,7 +506,7 @@ mod tests {
             EscrowStatus::Funded
         );
 
-        assert_eq!(balance(&env, &token, &funder), 0, "funder drained");
+        assert_eq!(balance(&env, &token, &funder), 10_000, "funder debited");
         assert_eq!(
             balance(&env, &token, &contract),
             10_000,
@@ -508,21 +519,37 @@ mod tests {
         assert_eq!(state.total_amount, 10_000);
         assert_eq!(state.released, 0);
 
+        // Step 2: Planting verification → 75% released
         client.verify_milestone(&farmer, &dummy_hash(&env, 1));
 
         assert_eq!(balance(&env, &token, &contract), 2_500, "25% still locked");
         assert_eq!(balance(&env, &token, &farmer), 7_500, "farmer received 75%");
-    }
 
-    // ── Dispute lifecycle ─────────────────────────────────────────────────────
+        env.ledger()
+            .with_mut(|l| l.timestamp += SIX_MONTHS_SECS + 1);
+        client.verify_survival(&farmer, &dummy_hash(&env, 2), &80);
+
+        assert_eq!(balance(&env, &token, &contract), 0, "contract fully drained");
+        assert_eq!(balance(&env, &token, &farmer), 10_000, "farmer received 100%");
+
+        let state = client.get_escrow(&farmer).unwrap();
+        assert_eq!(state.status, EscrowStatus::Completed);
+        assert_eq!(state.released, 10_000);
+    }
 
     #[test]
     fn test_raise_dispute_blocks_milestone_release() {
-        let (env, _admin, funder, farmer, arbiter, token, client) = setup();
+        let Ctx {
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
 
         client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
 
-        // Farmer raises a dispute
         client.raise_dispute(&farmer, &farmer);
 
         let state = client.get_escrow(&farmer).unwrap();
@@ -533,37 +560,114 @@ mod tests {
     #[test]
     #[should_panic(expected = "milestone release blocked: dispute is open")]
     fn test_verify_milestone_blocked_during_dispute() {
-        let (env, _admin, funder, farmer, arbiter, token, client) = setup();
+        let Ctx {
+            env,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
 
         client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
-        client.raise_dispute(&farmer, &funder); // funder raises dispute
-
-        // verify_milestone must panic
+        client.raise_dispute(&farmer, &funder);
         client.verify_milestone(&farmer, &dummy_hash(&env, 1));
     }
 
     #[test]
     fn test_resolve_dispute_release_to_seller() {
-        let (env, _admin, funder, farmer, arbiter, token, client) = setup();
+        let Ctx {
+            env,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
 
         client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
         client.raise_dispute(&farmer, &farmer);
-
-        // Arbiter rules in favour of the farmer (seller)
         client.resolve_dispute(&farmer, &arbiter, &true);
 
         let state = client.get_escrow(&farmer).unwrap();
         assert_eq!(state.status, EscrowStatus::Completed);
         assert!(!state.dispute_open);
         assert_eq!(balance(&env, &token, &farmer), 10_000);
-        assert_eq!(balance(&env, &token, &funder), 0);
+        assert_eq!(balance(&env, &token, &funder), 10_000);
+    }
+
+    #[test]
+    fn test_tranche_amounts_non_round_deposit() {
+        let Ctx {
+            env,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            contract,
+            ..
+        } = setup();
+        client.deposit(&funder, &farmer, &token, &999, &arbiter);
+
+        client.verify_milestone(&farmer, &dummy_hash(&env, 1));
+        let tranche1 = (999_i128 * 7_500) / 10_000; // = 749
+        assert_eq!(balance(&env, &token, &farmer), tranche1);
+
+        // Advance time for survival check
+        env.ledger().with_mut(|l| l.timestamp += SIX_MONTHS_SECS + 1);
+        client.verify_survival(&farmer, &dummy_hash(&env, 2), &80);
+        assert_eq!(balance(&env, &token, &farmer), 999);
+        assert_eq!(balance(&env, &token, &contract), 0);
+    }
+
+    #[test]
+    #[should_panic(expected = "milestone already processed")]
+    fn test_double_verify_milestone_rejected() {
+        let Ctx {
+            env,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
+        client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
+        client.verify_milestone(&farmer, &dummy_hash(&env, 1));
+        client.verify_milestone(&farmer, &dummy_hash(&env, 1));
+    }
+
+    #[test]
+    #[should_panic(expected = "first milestone not yet verified")]
+    fn test_verify_survival_before_milestone_rejected() {
+        let Ctx {
+            env,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
+        client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
+        client.verify_survival(&farmer, &dummy_hash(&env, 2), &80);
     }
 
     #[test]
     #[should_panic(expected = "6-month survival period not yet elapsed")]
     fn test_survival_too_early_rejected() {
-        let (env, _admin, funder, farmer, arbiter, token, client) = setup();
-
+        let Ctx {
+            env,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
         client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
         client.verify_milestone(&farmer, &dummy_hash(&env, 1));
         client.verify_survival(&farmer, &dummy_hash(&env, 2), &80);
@@ -572,52 +676,71 @@ mod tests {
     #[test]
     #[should_panic(expected = "survival rate below minimum")]
     fn test_survival_below_70_percent_rejected() {
-        let (env, _admin, funder, farmer, arbiter, token, client) = setup();
-
+        let Ctx {
+            env,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
         client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
         client.verify_milestone(&farmer, &dummy_hash(&env, 1));
-
         env.ledger()
             .with_mut(|l| l.timestamp += SIX_MONTHS_SECS + 1);
         client.verify_survival(&farmer, &dummy_hash(&env, 2), &69);
     }
 
     #[test]
-    #[should_panic(expected = "milestone already processed")]
-    fn test_double_verify_milestone_rejected() {
-        let (_env, _admin, funder, farmer, arbiter, token, client) = setup();
-        client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
-        client.verify_milestone(&farmer, &dummy_hash(&_env, 1));
-        client.verify_milestone(&farmer, &dummy_hash(&_env, 1));
-    }
-
-    #[test]
     #[should_panic(expected = "amount must be positive")]
     fn test_deposit_zero_rejected() {
-        let (env, _admin, funder, farmer, arbiter, token, client) = setup();
+        let Ctx {
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
         client.deposit(&funder, &farmer, &token, &0, &arbiter);
     }
 
     #[test]
     #[should_panic(expected = "active escrow already exists")]
     fn test_duplicate_deposit_rejected() {
-        let (env, _admin, funder, farmer, arbiter, token, client) = setup();
+        let Ctx {
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
         client.deposit(&funder, &farmer, &token, &5_000, &arbiter);
         client.deposit(&funder, &farmer, &token, &5_000, &arbiter);
     }
 
     #[test]
     fn test_refund_before_milestone_restores_funder_balance() {
-        let (env, _admin, funder, farmer, arbiter, token, client) = setup();
+        let Ctx {
+            env,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
 
         client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
-        assert_eq!(balance(&env, &token, &funder), 0);
+        assert_eq!(balance(&env, &token, &funder), 10_000);
 
         client.refund(&farmer);
 
         assert_eq!(
             balance(&env, &token, &funder),
-            10_000,
+            20_000,
             "funder fully refunded"
         );
         assert_eq!(balance(&env, &token, &farmer), 0, "farmer got nothing");
@@ -630,7 +753,15 @@ mod tests {
     #[test]
     #[should_panic(expected = "cannot refund after milestone release")]
     fn test_refund_after_milestone_rejected() {
-        let (env, _admin, funder, farmer, arbiter, token, client) = setup();
+        let Ctx {
+            env,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
 
         client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
         client.verify_milestone(&farmer, &dummy_hash(&env, 1));
@@ -639,7 +770,16 @@ mod tests {
 
     #[test]
     fn test_partial_releases() {
-        let (env, admin, funder, farmer, arbiter, token, client) = setup();
+        let Ctx {
+            env,
+            admin,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
 
         client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
 
@@ -659,11 +799,28 @@ mod tests {
     #[test]
     #[should_panic(expected = "total released exceeds milestone amount")]
     fn test_partial_release_over_release_attempt() {
-        let (_env, admin, funder, farmer, arbiter, token, client) = setup();
+        let Ctx {
+            admin,
+            client,
+            token,
+            funder,
+            farmer,
+            arbiter,
+            ..
+        } = setup();
         client.deposit(&funder, &farmer, &token, &10_000, &arbiter);
 
         client.release_partial(&admin, &farmer, &50);
         client.release_partial(&admin, &farmer, &50);
         client.release_partial(&admin, &farmer, &10);
+    }
+
+    // ── Init guard ────────────────────────────────────────────────────────────
+
+    #[test]
+    #[should_panic(expected = "already initialized")]
+    fn test_initialize_twice_rejected() {
+        let Ctx { env, client, .. } = setup();
+        client.initialize(&Address::generate(&env));
     }
 }
