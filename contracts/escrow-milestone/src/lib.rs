@@ -192,9 +192,19 @@ impl EscrowMilestone {
             .get(&key)
             .expect("no escrow found for farmer");
 
-        let payout = (state.total_amount * completion_pct as i128) / 100;
+        let payout = state
+            .total_amount
+            .checked_mul(completion_pct as i128)
+            .expect("payout calculation overflow")
+            .checked_div(100)
+            .expect("payout division error");
 
-        if state.released + payout > state.total_amount {
+        if state
+            .released
+            .checked_add(payout)
+            .expect("total released overflow")
+            > state.total_amount
+        {
             panic!("total released exceeds milestone amount");
         }
 
@@ -204,7 +214,10 @@ impl EscrowMilestone {
             &payout,
         );
 
-        state.released += payout;
+        state.released = state
+            .released
+            .checked_add(payout)
+            .expect("released amount overflow");
         env.storage().persistent().set(&key, &state);
 
         env.events().publish(
@@ -240,7 +253,12 @@ impl EscrowMilestone {
             panic!("milestone already processed or escrow not in funded state");
         }
 
-        let release_amount = (state.total_amount * MILESTONE_1_BPS) / BPS_DENOM;
+        let release_amount = state
+            .total_amount
+            .checked_mul(MILESTONE_1_BPS)
+            .expect("release amount overflow")
+            .checked_div(BPS_DENOM)
+            .expect("release amount division error");
 
         token::Client::new(&env, &state.token).transfer(
             &env.current_contract_address(),
@@ -296,7 +314,10 @@ impl EscrowMilestone {
             panic!("survival rate below minimum");
         }
 
-        let remainder = state.total_amount - state.released;
+        let remainder = state
+            .total_amount
+            .checked_sub(state.released)
+            .expect("remainder calculation underflow");
         if remainder <= 0 {
             panic!("nothing left to release");
         }
@@ -304,7 +325,10 @@ impl EscrowMilestone {
         token::Client::new(&env, &state.token)
             .transfer(&env.current_contract_address(), &state.farmer, &remainder);
 
-        state.released += remainder;
+        state.released = state
+            .released
+            .checked_add(remainder)
+            .expect("released amount overflow");
         state.status = EscrowStatus::Completed;
         state.survival_verification_hash = OptProof::Some(survival_verification_hash);
         state.survival_rate_percent = survival_rate_percent;
@@ -372,7 +396,10 @@ impl EscrowMilestone {
             panic!("no open dispute for this escrow");
         }
 
-        let remainder = state.total_amount - state.released;
+        let remainder = state
+            .total_amount
+            .checked_sub(state.released)
+            .expect("remainder calculation underflow");
 
         if release_to_seller {
             // Release remaining funds to the farmer
@@ -382,7 +409,10 @@ impl EscrowMilestone {
                     &state.farmer,
                     &remainder,
                 );
-                state.released += remainder;
+                state.released = state
+                    .released
+                    .checked_add(remainder)
+                    .expect("released amount overflow");
             }
             state.status = EscrowStatus::Completed;
         } else {

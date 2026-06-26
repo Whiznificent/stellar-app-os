@@ -285,7 +285,7 @@ impl TreeEscrow {
             if env.storage().persistent().has(&key) {
                 panic!("active escrow already exists for a farmer in this batch");
             }
-            total += slot.amount;
+            total = total.checked_add(slot.amount).expect("batch total overflow");
         }
 
         token::Client::new(&env, &token)
@@ -348,7 +348,12 @@ impl TreeEscrow {
             panic!("verified tree count exceeds donation");
         }
 
-        let tranche1 = (rec.total_amount * TRANCHE_1_BPS) / BPS_DENOM;
+        let tranche1 = rec
+            .total_amount
+            .checked_mul(TRANCHE_1_BPS)
+            .expect("tranche1 calculation overflow")
+            .checked_div(BPS_DENOM)
+            .expect("tranche1 division error");
         let tree_unit = Self::compute_token_unit(tree_decimals);
         let tree_tokens = verified_tree_count
             .checked_mul(tree_unit)
@@ -363,7 +368,10 @@ impl TreeEscrow {
         let recipient = rec.gift_recipient.clone().unwrap_or_else(|| rec.donor.clone());
         token::StellarAssetClient::new(&env, &tree_token).mint(&recipient, &tree_tokens);
 
-        rec.released += tranche1;
+        rec.released = rec
+            .released
+            .checked_add(tranche1)
+            .expect("released amount overflow");
         rec.verified_tree_count = verified_tree_count;
         rec.tree_tokens_minted = tree_tokens;
         rec.status = EscrowStatus::Planted;
@@ -405,7 +413,11 @@ impl TreeEscrow {
         }
 
         let now = env.ledger().timestamp();
-        if now < rec.planted_at + SIX_MONTHS_SECS {
+        let six_months_later = rec
+            .planted_at
+            .checked_add(SIX_MONTHS_SECS)
+            .expect("time calculation overflow");
+        if now < six_months_later {
             panic!("6-month survival period not yet elapsed");
         }
 
@@ -414,7 +426,7 @@ impl TreeEscrow {
             panic!("survival rate below minimum");
         }
 
-        let tranche2 = rec.total_amount - rec.released;
+        let tranche2 = rec.total_amount.checked_sub(rec.released).expect("tranche2 calculation underflow");
         if tranche2 <= 0 {
             panic!("nothing left to release");
         }
@@ -425,7 +437,7 @@ impl TreeEscrow {
             &tranche2,
         );
 
-        rec.released += tranche2;
+        rec.released = rec.released.checked_add(tranche2).expect("released amount overflow");
         rec.status = EscrowStatus::Completed;
         rec.survival_proof = proof_hash;
         rec.survival_rate_percent = survival_rate_percent;
@@ -580,7 +592,7 @@ impl TreeEscrow {
         for i in 0..n {
             let mut c = funding.contributions.get(i).unwrap();
             if c.funder == funder {
-                c.amount += amount;
+                c.amount = c.amount.checked_add(amount).expect("contribution amount overflow");
                 funding.contributions.set(i, c);
                 found = true;
                 break;
@@ -593,7 +605,7 @@ impl TreeEscrow {
             });
         }
 
-        funding.total_funded += amount;
+        funding.total_funded = funding.total_funded.checked_add(amount).expect("total funded overflow");
         env.storage().persistent().set(&key, &funding);
 
         env.events()
@@ -634,7 +646,7 @@ impl TreeEscrow {
         if funding.total_funded <= 0 {
             panic!("no funds to release");
         }
-        let remaining = funding.total_funded - funding.released;
+        let remaining = funding.total_funded.checked_sub(funding.released).expect("remaining calculation underflow");
         if payout_amount <= 0 || payout_amount > remaining {
             panic!("invalid payout amount");
         }
@@ -662,7 +674,7 @@ impl TreeEscrow {
                 continue;
             }
             let c = funding.contributions.get(i).unwrap();
-            let payout = (c.amount * payout_amount) / funding.total_funded;
+            let payout = (c.amount.checked_mul(payout_amount).expect("payout calculation overflow")).checked_div(funding.total_funded).expect("payout division error");
             if payout > 0 {
                 token_client.transfer(
                     &env.current_contract_address(),
@@ -670,13 +682,13 @@ impl TreeEscrow {
                     &payout,
                 );
             }
-            paid_so_far += payout;
+            paid_so_far = paid_so_far.checked_add(payout).expect("paid_so_far overflow");
             env.events()
                 .publish((symbol_short!("propayout"), tree_id), (c.funder, payout));
         }
 
         let largest = funding.contributions.get(largest_idx).unwrap();
-        let largest_payout = payout_amount - paid_so_far;
+        let largest_payout = payout_amount.checked_sub(paid_so_far).expect("largest payout calculation underflow");
         if largest_payout > 0 {
             token_client.transfer(
                 &env.current_contract_address(),
@@ -689,7 +701,7 @@ impl TreeEscrow {
             (largest.funder, largest_payout),
         );
 
-        funding.released += payout_amount;
+        funding.released = funding.released.checked_add(payout_amount).expect("released amount overflow");
         if funding.released >= funding.total_funded {
             funding.status = TreeFundingStatus::Released;
         }
@@ -723,7 +735,7 @@ impl TreeEscrow {
         let mut i = 0u32;
         while i < decimals {
             unit = unit.checked_mul(10).expect("token unit overflow");
-            i += 1;
+            i = i.checked_add(1).expect("loop counter overflow");
         }
         unit
     }

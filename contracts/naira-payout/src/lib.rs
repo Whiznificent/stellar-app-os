@@ -142,7 +142,7 @@ impl NairaPayout {
             (Symbol::new(&env, "LastPayoutTime"), farmer.clone()).into_val(&env);
         if env.storage().persistent().has(&last_payout_key) {
             let last_payout_time: u64 = env.storage().persistent().get(&last_payout_key).unwrap();
-            if now < last_payout_time + min_interval {
+            if now < last_payout_time.checked_add(min_interval).expect("time calculation overflow") {
                 panic!("rate limit: payout interval too short");
             }
         }
@@ -154,12 +154,12 @@ impl NairaPayout {
             .get(&daily_total_key)
             .unwrap_or((0, 0));
 
-        let current_day = now / 86400;
+        let current_day = now.checked_div(86400).expect("day calculation overflow");
         if current_day > last_reset_day {
             current_total = 0;
         }
 
-        if current_total + usdc_amount > max_daily {
+        if current_total.checked_add(usdc_amount).expect("daily total overflow") > max_daily {
             panic!("MAX_DAILY_PAYOUT exceeded");
         }
 
@@ -197,7 +197,7 @@ impl NairaPayout {
         env.storage().persistent().set(&last_payout_key, &now);
         env.storage().instance().set(
             &daily_total_key,
-            &(current_total + usdc_amount, current_day),
+            &(current_total.checked_add(usdc_amount).expect("daily total update overflow"), current_day),
         );
 
         env.events().publish(
@@ -278,7 +278,7 @@ impl NairaPayout {
         let now = env.ledger().timestamp();
         env.storage().instance().set(
             &Symbol::new(&env, "DailyPayoutTotal"),
-            &(0i128, now / 86400),
+            &(0i128, now.checked_div(86400).expect("day calculation overflow")),
         );
     }
 
