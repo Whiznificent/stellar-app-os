@@ -1,17 +1,55 @@
-import { NextResponse } from 'next/server';
-import { getMockTrees } from '@/lib/api/mock/trees';
+/**
+ * GET /api/trees/:id
+ *
+ * Returns a single tree record by its treeId (e.g. "HRV-2024-0001") or
+ * internal id (e.g. "tree-001").  Data is served from the 30-second cache
+ * shared with GET /api/trees.
+ *
+ * Responses:
+ *   200  { tree: Tree, cachedAt: string }
+ *   400  { error: "id is required" }
+ *   404  { error: "tree not found" }
+ *   500  { error: string }
+ *
+ * Closes #542
+ */
 
-/** GET /api/trees/[id] — single tree detail (#532, #533). */
-export async function GET(
-  _request: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-  const tree = getMockTrees().find((t) => t.id === id || t.treeId === id);
+import { type NextRequest, NextResponse } from 'next/server';
+import { getTreeById } from '@/lib/api/tree-registry';
 
-  if (!tree) {
-    return NextResponse.json({ error: 'TREE_NOT_FOUND' }, { status: 404 });
+export const runtime = 'nodejs';
+
+interface RouteParams {
+  params: Promise<{ id: string }>;
+}
+
+export async function GET(_request: NextRequest, { params }: RouteParams) {
+  try {
+    const { id } = await params;
+
+    if (!id || id.trim() === '') {
+      return NextResponse.json({ error: 'id is required' }, { status: 400 });
+    }
+
+    const tree = await getTreeById(id.trim());
+
+    if (!tree) {
+      return NextResponse.json({ error: 'tree not found' }, { status: 404 });
+    }
+
+    return NextResponse.json(
+      { tree, cachedAt: new Date().toISOString() },
+      {
+        headers: {
+          'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=10',
+        },
+      }
+    );
+  } catch (err) {
+    console.error('[api/trees/:id] error:', err);
+    return NextResponse.json(
+      { error: err instanceof Error ? err.message : 'Internal server error' },
+      { status: 500 }
+    );
   }
-
-  return NextResponse.json({ tree });
 }
