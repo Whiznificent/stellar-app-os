@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "contract-utils",
+    "escrow",
     "nullifier-registry",
     "escrow-milestone",
     "tree-escrow",
@@ -15,8 +16,7 @@ members = [
     "carbon-credits",
     "kyc-attestation",
     "species-registry",
-    "species-voting",
-    "treasury",
+    "subscription-sponsorship",
 ]
 resolver = "2"
 
