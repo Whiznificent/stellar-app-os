@@ -31,12 +31,19 @@ use soroban_sdk::{
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-/// 75% in basis points
-const TRANCHE_1_BPS: i128 = 7_500;
+/// Tranche 1: 30% at planting
+const TRANCHE_1_BPS: i128 = 3_000;
+/// Tranche 2: 40% at 6-month survival
+const TRANCHE_2_BPS: i128 = 4_000;
+/// Tranche 3: 30% at 1-year milestone
+const TRANCHE_3_BPS: i128 = 3_000;
 const BPS_DENOM: i128 = 10_000;
 
 /// 6 months in seconds (approx 26 weeks)
 const SIX_MONTHS_SECS: u64 = 60 * 60 * 24 * 7 * 26;
+
+/// 1 year in seconds (approx 52 weeks)
+const ONE_YEAR_SECS: u64 = 60 * 60 * 24 * 7 * 52;
 
 /// Maximum slots per batch deposit (Stellar operation limit safety margin)
 const MAX_BATCH_SIZE: u32 = 50;
@@ -54,6 +61,7 @@ const DEFAULT_JOB_SIZE_THRESHOLD: i128 = 10;
 pub enum EscrowStatus {
     Funded,
     Planted,
+    Survived,
     Completed,
     Refunded,
 }
@@ -76,6 +84,7 @@ pub struct EscrowRecord {
     pub planting_proof: BytesN<32>,
     pub survival_proof: BytesN<32>,
     pub survival_rate_percent: u32,
+    pub year_proof: BytesN<32>,
 }
 
 /// A single slot in a batch deposit: one farmer address and the amount for that tree.
@@ -299,8 +308,9 @@ impl TreeEscrow {
                 status: EscrowStatus::Funded,
                 planted_at: 0,
                 planting_proof: empty_hash.clone(),
-                survival_proof: empty_hash,
+                survival_proof: empty_hash.clone(),
                 survival_rate_percent: 0,
+                year_proof: empty_hash,
             },
         );
 
@@ -363,6 +373,7 @@ impl TreeEscrow {
                     planting_proof: empty_hash.clone(),
                     survival_proof: empty_hash.clone(),
                     survival_rate_percent: 0,
+                    year_proof: empty_hash,
                 },
             );
             env.events()
@@ -372,7 +383,7 @@ impl TreeEscrow {
         env.events().publish((symbol_short!("batch"), donor), total);
     }
 
-    /// Admin-verified planting: releases Tranche 1 (75%) and mints TREE rewards.
+    /// Admin-verified planting: releases Tranche 1 (30%) and mints TREE rewards.
     pub fn verify_planting(
         env: Env,
         farmer: Address,
@@ -429,7 +440,7 @@ impl TreeEscrow {
             .publish((symbol_short!("treemint"), recipient), tree_tokens);
     }
 
-    /// Admin-verified survival check: releases Tranche 2 (25%) once 6 months
+    /// Admin-verified survival check: releases Tranche 2 (40%) once 6 months
     /// have elapsed and the reported survival rate ≥ the configured threshold.
     pub fn verify_survival(
         env: Env,
@@ -465,7 +476,7 @@ impl TreeEscrow {
             panic!("survival rate below minimum");
         }
 
-        let tranche2 = rec.total_amount - rec.released;
+        let tranche2 = (rec.total_amount * TRANCHE_2_BPS) / BPS_DENOM;
         if tranche2 <= 0 {
             panic!("nothing left to release");
         }
@@ -477,7 +488,7 @@ impl TreeEscrow {
         );
 
         rec.released += tranche2;
-        rec.status = EscrowStatus::Completed;
+        rec.status = EscrowStatus::Survived;
         rec.survival_proof = proof_hash;
         rec.survival_rate_percent = survival_rate_percent;
 
@@ -485,6 +496,53 @@ impl TreeEscrow {
 
         env.events()
             .publish((symbol_short!("survived"), farmer), tranche2);
+    }
+
+    /// Admin-verified 1-year milestone: releases Tranche 3 (30%) once 1 year
+    /// has elapsed since planting.
+    pub fn verify_year_milestone(
+        env: Env,
+        farmer: Address,
+        proof_hash: BytesN<32>,
+    ) {
+        let (admin, _tree_token, _decimals) = Self::admin_tree(&env);
+        admin.require_auth();
+
+        let key = DataKey::Escrow(farmer.clone());
+        let mut rec: EscrowRecord = env
+            .storage()
+            .persistent()
+            .get(&key)
+            .expect("no escrow for farmer");
+
+        if rec.status != EscrowStatus::Survived {
+            panic!("survival not yet verified");
+        }
+
+        let now = env.ledger().timestamp();
+        if now < rec.planted_at + ONE_YEAR_SECS {
+            panic!("1-year milestone period not yet elapsed");
+        }
+
+        let tranche3 = rec.total_amount - rec.released;
+        if tranche3 <= 0 {
+            panic!("nothing left to release");
+        }
+
+        token::Client::new(&env, &rec.token).transfer(
+            &env.current_contract_address(),
+            &rec.farmer,
+            &tranche3,
+        );
+
+        rec.released += tranche3;
+        rec.status = EscrowStatus::Completed;
+        rec.year_proof = proof_hash;
+
+        env.storage().persistent().set(&key, &rec);
+
+        env.events()
+            .publish((symbol_short!("year_milestone"), farmer), tranche3);
     }
 
     pub fn refund(env: Env, farmer: Address) {
@@ -927,7 +985,7 @@ mod tests {
             .verify_planting(&ctx.farmer, &proof(&ctx.env, 1), &42);
         let rec = ctx.client.get_record(&ctx.farmer).unwrap();
         assert_eq!(rec.status, EscrowStatus::Planted);
-        assert_eq!(rec.released, 7_500);
+        assert_eq!(rec.released, 3_000); // 30% of 10,000
         assert_eq!(rec.tree_count, 42);
         assert_eq!(rec.verified_tree_count, 42);
 
@@ -945,9 +1003,19 @@ mod tests {
         ctx.client
             .verify_survival(&ctx.farmer, &proof(&ctx.env, 2), &70);
         let rec = ctx.client.get_record(&ctx.farmer).unwrap();
-        assert_eq!(rec.status, EscrowStatus::Completed);
-        assert_eq!(rec.released, 10_000);
+        assert_eq!(rec.status, EscrowStatus::Survived);
+        assert_eq!(rec.released, 7_000); // 30% + 40% = 70%
         assert_eq!(rec.survival_rate_percent, 70);
+
+        ctx.env
+            .ledger()
+            .with_mut(|l| l.timestamp += ONE_YEAR_SECS - SIX_MONTHS_SECS + 1);
+
+        ctx.client
+            .verify_year_milestone(&ctx.farmer, &proof(&ctx.env, 3));
+        let rec = ctx.client.get_record(&ctx.farmer).unwrap();
+        assert_eq!(rec.status, EscrowStatus::Completed);
+        assert_eq!(rec.released, 10_000); // 100%
     }
 
     #[test]
@@ -991,6 +1059,14 @@ mod tests {
             .with_mut(|l| l.timestamp += SIX_MONTHS_SECS + 1);
         ctx.client
             .verify_survival(&ctx.farmer, &proof(&ctx.env, 2), &55);
+        let rec = ctx.client.get_record(&ctx.farmer).unwrap();
+        assert_eq!(rec.status, EscrowStatus::Survived);
+        
+        ctx.env
+            .ledger()
+            .with_mut(|l| l.timestamp += ONE_YEAR_SECS - SIX_MONTHS_SECS + 1);
+        ctx.client
+            .verify_year_milestone(&ctx.farmer, &proof(&ctx.env, 3));
         assert_eq!(
             ctx.client.get_record(&ctx.farmer).unwrap().status,
             EscrowStatus::Completed
@@ -1038,6 +1114,86 @@ mod tests {
         let ctx = setup();
         ctx.client
             .deposit(&ctx.donor, &ctx.farmer, &ctx.token, &10_000, &0, &5);
+    }
+
+    // ── 1-year milestone tests (#494) ───────────────────────────────────────────
+
+    #[test]
+    #[should_panic(expected = "survival not yet verified")]
+    fn test_year_milestone_before_survival_rejected() {
+        let ctx = setup();
+        ctx.client
+            .deposit(&ctx.donor, &ctx.farmer, &ctx.token, &10_000, &42, &5);
+        ctx.client
+            .verify_planting(&ctx.farmer, &proof(&ctx.env, 1), &42);
+        ctx.env
+            .ledger()
+            .with_mut(|l| l.timestamp += ONE_YEAR_SECS + 1);
+        ctx.client
+            .verify_year_milestone(&ctx.farmer, &proof(&ctx.env, 2));
+    }
+
+    #[test]
+    #[should_panic(expected = "1-year milestone period not yet elapsed")]
+    fn test_year_milestone_too_early_rejected() {
+        let ctx = setup();
+        ctx.client
+            .deposit(&ctx.donor, &ctx.farmer, &ctx.token, &10_000, &42, &5);
+        ctx.client
+            .verify_planting(&ctx.farmer, &proof(&ctx.env, 1), &42);
+        ctx.env
+            .ledger()
+            .with_mut(|l| l.timestamp += SIX_MONTHS_SECS + 1);
+        ctx.client
+            .verify_survival(&ctx.farmer, &proof(&ctx.env, 2), &70);
+        ctx.env.ledger().with_mut(|l| l.timestamp += 86_400);
+        ctx.client
+            .verify_year_milestone(&ctx.farmer, &proof(&ctx.env, 3));
+    }
+
+    #[test]
+    fn test_year_milestone_at_one_year_accepted() {
+        let ctx = setup();
+        ctx.client
+            .deposit(&ctx.donor, &ctx.farmer, &ctx.token, &10_000, &42, &5);
+        ctx.client
+            .verify_planting(&ctx.farmer, &proof(&ctx.env, 1), &42);
+        ctx.env
+            .ledger()
+            .with_mut(|l| l.timestamp += SIX_MONTHS_SECS + 1);
+        ctx.client
+            .verify_survival(&ctx.farmer, &proof(&ctx.env, 2), &70);
+        ctx.env
+            .ledger()
+            .with_mut(|l| l.timestamp += ONE_YEAR_SECS - SIX_MONTHS_SECS + 1);
+        ctx.client
+            .verify_year_milestone(&ctx.farmer, &proof(&ctx.env, 3));
+        assert_eq!(
+            ctx.client.get_record(&ctx.farmer).unwrap().status,
+            EscrowStatus::Completed
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "nothing left to release")]
+    fn test_year_milestone_double_call_rejected() {
+        let ctx = setup();
+        ctx.client
+            .deposit(&ctx.donor, &ctx.farmer, &ctx.token, &10_000, &42, &5);
+        ctx.client
+            .verify_planting(&ctx.farmer, &proof(&ctx.env, 1), &42);
+        ctx.env
+            .ledger()
+            .with_mut(|l| l.timestamp += SIX_MONTHS_SECS + 1);
+        ctx.client
+            .verify_survival(&ctx.farmer, &proof(&ctx.env, 2), &70);
+        ctx.env
+            .ledger()
+            .with_mut(|l| l.timestamp += ONE_YEAR_SECS - SIX_MONTHS_SECS + 1);
+        ctx.client
+            .verify_year_milestone(&ctx.farmer, &proof(&ctx.env, 3));
+        ctx.client
+            .verify_year_milestone(&ctx.farmer, &proof(&ctx.env, 4));
     }
 
     #[test]

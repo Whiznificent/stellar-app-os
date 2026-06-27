@@ -39,12 +39,19 @@ Contracts panic with a descriptive string on invalid input. The Stellar SDK surf
 | `"proposal has not passed"` | Attempting to execute a non-passed proposal |
 | `"planting density below minimum for job size"` — Job area meets threshold but density is too low |
 | `"area hectares must be positive"` — `area_hectares ≤ 0` |
+| `"survival not yet verified"` — Attempting to call 1-year milestone before survival check |
+| `"1-year milestone period not yet elapsed"` — Called before 1 year elapsed since planting |
 
 ---
 
 ## tree-escrow
 
-State machine: `Funded → Planted → Completed` (or `Funded → Refunded`)
+State machine: `Funded → Planted → Survived → Completed` (or `Funded → Refunded`)
+
+**Time-Locked Milestones (#494):** Funds are released in 3 tranches:
+- Tranche 1 (30%) at planting verification
+- Tranche 2 (40%) at 6-month survival check
+- Tranche 3 (30%) at 1-year milestone
 
 **Minimum Planting Density Rule (#514):** For jobs with `area_hectares` ≥ `job_size_threshold`, the contract enforces a minimum planting density of `min_density` trees per hectare. Small jobs below the threshold are exempt from density rules.
 
@@ -144,7 +151,7 @@ await client.deposit({
 
 ### `verify_planting`
 
-Admin confirms GPS + photo proof of planting. Releases **75%** of escrowed funds to the farmer immediately.
+Admin confirms GPS + photo proof of planting. Releases **Tranche 1 (30%)** of escrowed funds to the farmer immediately and mints TREE tokens.
 
 **Auth:** admin-only
 
@@ -181,14 +188,15 @@ await client.verify_planting({
 
 ### `verify_survival`
 
-Admin confirms 6-month survival check. Releases the remaining **25%** to the farmer. Enforces that at least 6 months (≈ 26 weeks) have elapsed since `verify_planting`.
+Admin confirms 6-month survival check. Releases **Tranche 2 (40%)** to the farmer. Enforces that at least 6 months (≈ 26 weeks) have elapsed since `verify_planting` and survival rate meets threshold.
 
 **Auth:** admin-only
 
 | Parameter | Type | Description |
 |---|---|---|
-| `farmer` | `Address` | Farmer whose escrow to complete |
+| `farmer` | `Address` | Farmer whose escrow to update |
 | `proof_hash` | `BytesN<32>` | SHA-256 of the survival proof payload |
+| `survival_rate_percent` | `u32` | Survival rate (0..=100) |
 
 **Returns:** `void`
 
@@ -197,12 +205,43 @@ Admin confirms 6-month survival check. Releases the remaining **25%** to the far
 **Errors:**
 - `"planting not yet verified"` — status is not `Planted`
 - `"6-month survival period not yet elapsed"` — called too early
+- `"survival rate below minimum"` — survival rate below configured threshold
 - `"nothing left to release"` — released amount already equals total
 
 ```ts
 await client.verify_survival({
   farmer: farmerAddress,
   proof_hash: survivalProofHash,
+  survival_rate_percent: 70,
+});
+```
+
+---
+
+### `verify_year_milestone`
+
+Admin confirms 1-year milestone. Releases **Tranche 3 (30%)** to the farmer. Enforces that at least 1 year (≈ 52 weeks) has elapsed since `verify_planting`.
+
+**Auth:** admin-only
+
+| Parameter | Type | Description |
+|---|---|---|
+| `farmer` | `Address` | Farmer whose escrow to complete |
+| `proof_hash` | `BytesN<32>` | SHA-256 of the year milestone proof payload |
+
+**Returns:** `void`
+
+**Events emitted:** `YearMilestone(farmer) → (tranche3_amount, proof_hash)`
+
+**Errors:**
+- `"survival not yet verified"` — status is not `Survived`
+- `"1-year milestone period not yet elapsed"` — called too early
+- `"nothing left to release"` — released amount already equals total
+
+```ts
+await client.verify_year_milestone({
+  farmer: farmerAddress,
+  proof_hash: yearMilestoneProofHash,
 });
 ```
 
