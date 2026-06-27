@@ -16,7 +16,7 @@ const MOCK_LISTINGS: Record<string, Listing> = {
     location: 'Amazon Basin, Brazil',
     isActive: true,
     fundingStatus: 'Open',
-    closingAt: '2025-12-31T00:00:00Z',
+    closingAt: '2024-12-31T00:00:00Z',
   },
   '2': {
     id: '2',

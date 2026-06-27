@@ -68,10 +68,10 @@ export const BULK_PURCHASE_MIN_QUANTITY = 1000;
 export type MetadataStorageType = 'on-chain' | 'ipfs' | 'none';
 
 export interface CorporateMetadata {
-  companyName: string;
-  initiativeDescription: string;
-  initiativeUrl?: string;
   storageType: MetadataStorageType;
+  companyName?: string;
+  initiativeDescription?: string;
+  initiativeUrl?: string;
   storageRef?: string;
 }
 
@@ -89,4 +89,28 @@ export interface BulkPurchaseResult {
   networkPassphrase: string;
   ipfsCid?: string;
   memoValue?: string;
+}
+
+export interface AirdropRecipient {
+  userId: string;
+  walletAddress: string;
+  email: string;
+  joinedAt: string;
+}
+
+export interface AirdropRequest {
+  creditsPerSponsor: number;
+  projectId: string;
+  platformLaunchDate: string;
+}
+
+export interface AirdropPreview {
+  recipients: AirdropRecipient[];
+  totalCredits: number;
+  cutoffDate: string;
+}
+
+export interface AirdropResult {
+  totalQueued: number;
+  recipients: { walletAddress: string; status: 'queued' | 'skipped' }[];
 }

@@ -1,6 +1,6 @@
 'use client';
 
-import type React from 'react';
+import React from 'react';
 import Link from 'next/link';
 import { NewsletterForm } from '@/components/organisms/Footer/NewsletterForm';
 import { FaXTwitter, FaGithub, FaDiscord } from 'react-icons/fa6';
@@ -22,6 +22,13 @@ interface SocialLink {
 interface FooterSection {
   title: string;
   links: FooterLink[];
+}
+
+interface SocialLink {
+  label: string;
+  href: string;
+  icon: React.ComponentType<{ size?: number; className?: string }>;
+  ariaLabel: string;
 }
 
 function buildFooterSections(t: TFunction): FooterSection[] {
