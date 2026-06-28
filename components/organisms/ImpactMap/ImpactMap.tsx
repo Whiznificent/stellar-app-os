@@ -142,10 +142,7 @@ export function ImpactMap({ regions, trees = [] }: ImpactMapProps): JSX.Element 
                     {tree.species} · {tree.region}
                   </p>
                   <p>{tree.co2OffsetKgPerYear} kg CO₂ / year</p>
-                  <Link
-                    href={`/trees/${tree.id}`}
-                    className="text-stellar-green underline"
-                  >
+                  <Link href={`/trees/${tree.id}`} className="text-stellar-green underline">
                     View tree details
                   </Link>
                 </div>

@@ -110,7 +110,7 @@ export function connectXBull(network: NetworkType): Promise<string> {
   }
 
   return new Promise((resolve, reject) => {
-    const networkPassphrase =
+    const _networkPassphrase =
       network === 'mainnet'
         ? 'Public Global Stellar Network ; September 2015'
         : 'Test SDF Network ; September 2015';
@@ -131,12 +131,10 @@ export function connectXBull(network: NetworkType): Promise<string> {
           if (error?.message?.includes('rejected') || error?.message?.includes('cancel')) {
             reject(new Error('Connection rejected by user'));
           } else {
-            reject(
-              new Error(error?.message || 'Failed to get public key from xBull')
-            );
+            reject(new Error(error?.message || 'Failed to get public key from xBull'));
           }
         });
-    } catch (error) {
+    } catch {
       reject(new Error('Failed to connect to xBull wallet'));
     }
   });
