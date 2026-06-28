@@ -14,17 +14,18 @@ import { cacheClear } from '@/lib/api/tree-registry-cache';
 import { getSponsorImpact, isValidStellarAddress } from '@/lib/api/carbon-impact';
 
 // ── mock heavy stellar imports ────────────────────────────────────────────────
+import { vi } from 'vitest';
 
-jest.mock('@/lib/stellar/tree-asset', () => ({
+vi.mock('@/lib/stellar/tree-asset', () => ({
   CO2_KG_PER_TREE: 48,
   TREE_ISSUER_TESTNET: 'G_MOCK_ISSUER',
-  getTreeAsset: jest.fn(),
-  getTreeExplorerUrl: jest.fn(),
+  getTreeAsset: vi.fn(),
+  getTreeExplorerUrl: vi.fn(),
   TREE_ISSUER_MAINNET: '',
   TREE_DISTRIBUTOR_TESTNET: '',
 }));
 
-jest.mock('@/lib/config/network', () => ({
+vi.mock('@/lib/config/network', () => ({
   networkConfig: { horizonUrl: 'https://horizon-testnet.stellar.org', networkPassphrase: 'Test' },
 }));
 
@@ -95,7 +96,9 @@ describe('getSponsorImpact', () => {
   it('bySpecies is sorted descending by treeCount', async () => {
     const result = await getSponsorImpact(VALID_ADDRESS);
     for (let i = 1; i < result.bySpecies.length; i++) {
-      expect(result.bySpecies[i - 1].treeCount).toBeGreaterThanOrEqual(result.bySpecies[i].treeCount);
+      expect(result.bySpecies[i - 1].treeCount).toBeGreaterThanOrEqual(
+        result.bySpecies[i].treeCount
+      );
     }
   });
 
