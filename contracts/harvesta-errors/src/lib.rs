@@ -78,6 +78,11 @@ pub enum HarvestaError {
     MaturityYearsMustBePositive = 63,
     SpeciesNotFound = 64,
 
+    // ── NFT Certificate (65–67) ───────────────────────────────────────────────
+    TokenAlreadyMinted = 65,
+    TokenNotFound = 66,
+    MetadataMismatch = 67,
+
     // ── Arithmetic overflows (80–81) ──────────────────────────────────────────
     TreeTokenMintOverflow = 80,
     TokenUnitOverflow = 81,
