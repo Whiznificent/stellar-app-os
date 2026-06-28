@@ -53,7 +53,7 @@ async function fetchHorizonTreeOps(): Promise<
 
       const treeId = `HRV-HORIZON-${payment.id.slice(-6)}`;
       result.set(treeId, {
-        status: 'planted' as const, // Default status since transaction memo is async
+        status: toTreeStatus((payment as any).transaction_attr?.memo as string | undefined),
         plantedAt: payment.created_at,
       });
     }

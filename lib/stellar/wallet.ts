@@ -104,7 +104,7 @@ export function connectAlbedo(network: NetworkType): Promise<string> {
   });
 }
 
-export function connectXBull(network: NetworkType): Promise<string> {
+export function connectXBull(_network: NetworkType): Promise<string> {
   if (typeof window === 'undefined') {
     throw new Error('xBull wallet can only be accessed in the browser');
   }

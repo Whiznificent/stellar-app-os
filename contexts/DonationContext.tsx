@@ -5,9 +5,9 @@ import {
   type DonationFlowState,
   type DonorInfo,
   type RegionAllocation,
-  type GiftDetails,
   DEFAULT_DONATION_FLOW_STATE,
 } from '@/lib/types/donor';
+import type { GiftDetails } from '@/lib/types/gift';
 
 interface DonationContextValue {
   state: DonationFlowState;
