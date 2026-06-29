@@ -81,4 +81,6 @@ pub enum HarvestaError {
     // ── Arithmetic overflows (80–81) ──────────────────────────────────────────
     TreeTokenMintOverflow = 80,
     TokenUnitOverflow = 81,
+    InvalidSignature = 82,
+    NonceAlreadyUsed = 83,
 }
