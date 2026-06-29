@@ -123,4 +123,16 @@ pub enum HarvestaError {
     // ── Arithmetic overflows (80–81) ──────────────────────────────────────────
     TreeTokenMintOverflow = 80,
     TokenUnitOverflow = 81,
+
+    // ── Multi-sig governance (82–91) ──────────────────────────────────────────
+    MultisigNotInitialized = 82,
+    NotASigner = 83,
+    ProposalNotFound = 84,
+    ProposalAlreadyExecuted = 85,
+    AlreadyApproved = 86,
+    ThresholdTooHigh = 87,
+    ThresholdMustBePositive = 88,
+    SignerAlreadyExists = 89,
+    SignerNotFound = 90,
+    MinimumOneSignerRequired = 91,
 }
