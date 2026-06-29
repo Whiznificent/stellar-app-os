@@ -14,7 +14,7 @@ pub enum HarvestaError {
     AlreadyPaused = 5,
     NotPaused = 6,
     NoPendingAdmin = 7,
-    ContractMustBeTreeTokenAdmin = 8,
+    ContractMustBeTreeTokenAdm = 8,
 
     // ── Amount / value validation (9–13) ──────────────────────────────────────
     ValueMustBePositive = 9,
