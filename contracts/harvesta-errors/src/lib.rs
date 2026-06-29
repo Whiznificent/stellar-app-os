@@ -67,6 +67,22 @@ pub enum HarvestaError {
     /// on-chain for this farmer's identity document.
     HashMismatch = 66,
 
+    // ── Naira-payout lifecycle (47–53) ─────────────────────────────────────────
+    /// A payout record for the same farmer is already pending.
+    PendingPayoutAlreadyExists = 47,
+    /// Minimum interval between payouts to the same farmer has not elapsed.
+    PayoutIntervalTooShort = 48,
+    /// The combined USDC for the current day exceeds the daily limit.
+    MaxDailyPayoutExceeded = 49,
+    /// The payout record exists but is not in Pending status.
+    PayoutNotPending = 50,
+    /// Only payouts in Pending status can be cancelled.
+    CanOnlyCancelPending = 51,
+    /// No payout record exists for the given farmer.
+    PayoutNotFound = 52,
+    /// Expected NGN amount must be positive.
+    ExpectedNgnMustBePositive = 53,
+
     // ── Dispute / arbiter (38–46) ─────────────────────────────────────────────
     // DisputeAlreadyOpen = 38,
     // NoOpenDispute = 39,
@@ -82,8 +98,8 @@ pub enum HarvestaError {
     Co2MustBePositive = 62,
     MaturityYearsMustBePositive = 63,
     SpeciesNotFound = 64,
-    InvasiveSpecies = 65,
-    HighWaterUse = 66,
+    InvasiveSpecies = 67,
+    HighWaterUse = 68,
 
     // ── Carbon marketplace (100–107) ───────────────────────────────────────────
     ListingAmountMustBePositive = 100,
@@ -100,6 +116,12 @@ pub enum HarvestaError {
     AuctionNotActive = 111,
     AuctionExpired = 112,
     BidBelowReservePrice = 113,
+
+    // ── Naira-payout slippage protection (114–115) ────────────────────────────
+    /// The expected NGN amount deviates beyond the configured slippage tolerance.
+    SlippageExceeded = 114,
+    /// The slippage configuration value is out of valid range.
+    InvalidSlippage = 115,
 
     // ── Arithmetic overflows (80–81) ──────────────────────────────────────────
     TreeTokenMintOverflow = 80,
