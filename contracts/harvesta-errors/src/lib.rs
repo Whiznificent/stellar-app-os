@@ -57,15 +57,21 @@ pub enum HarvestaError {
     // TreeNotOpenForRelease = 33,
     // NoFundsToRelease = 34,
 
-    // ── Farmer registry (35–37, 65) ───────────────────────────────────────────
+    // ── Farmer registry (35–37, 67-68) ───────────────────────────────────────────
     FarmerAlreadyRegistered = 35,
     FarmerNotRegistered = 36,
     InvalidRegion = 37,
     /// Caller is not a registered validator — gated read/write denied.
-    NotValidator = 65,
+    NotValidator = 67,
     /// The SHA-256 hash supplied by the caller does not match the one stored
     /// on-chain for this farmer's identity document.
-    HashMismatch = 66,
+    HashMismatch = 68,
+
+
+    // ── Farm Plots (150–151) ──────────────────────────────────────────────
+    InvalidCoordinatesCount = 150,
+    PlotAlreadyExists = 151,
+
 
     // ── Dispute / arbiter (38–46) ─────────────────────────────────────────────
     // DisputeAlreadyOpen = 38,
