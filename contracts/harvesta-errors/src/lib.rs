@@ -82,8 +82,8 @@ pub enum HarvestaError {
     Co2MustBePositive = 62,
     MaturityYearsMustBePositive = 63,
     SpeciesNotFound = 64,
-    InvasiveSpecies = 65,
-    HighWaterUse = 66,
+    InvasiveSpecies = 67,
+    HighWaterUse = 68,
 
     // ── Carbon marketplace (100–107) ───────────────────────────────────────────
     ListingAmountMustBePositive = 100,
