@@ -20,13 +20,13 @@ pub enum HarvestaError {
     AlreadyPaused = 5,
     NotPaused = 6,
     NoPendingAdmin = 7,
-    ContractMustBeTreeTokenAdmin = 8,
+    ContractMustBeTreeTokenAdm = 8,
 
     // Amount / value validation (9-15)
     AmountMustBePositive = 9,
     TreeCountMustBePositive = 10,
     VerifiedCountMustBePositive = 11,
-    VerifiedCountExceedsDonation = 12,
+    VerifiedCountExceedsDon = 12,
     InvalidPayoutAmount = 13,
     BurnAmountMustBePositive = 14,
     SlotAmountMustBePositive = 15,
@@ -67,8 +67,8 @@ pub enum HarvestaError {
     NotBuyerOrSeller = 42,
     MilestoneReleaseBlocked = 43,
     MilestoneAlreadyProcessed = 44,
-    CompletionPercentageOutOfRange = 45,
-    TotalReleasedExceedsMilestone = 46,
+    CompletionPercentOutOfRange = 45,
+    TotalReleasedExceedsMile = 46,
 
     // Naira payout (47-54)
     PendingPayoutAlreadyExists = 47,
@@ -83,7 +83,7 @@ pub enum HarvestaError {
     // Aggregate impact verifier (55-59)
     FarmCountMustBePositive = 55,
     PeriodEndBeforeStart = 56,
-    ProofDigestAlreadyRegistered = 57,
+    ProofDigestAlreadyReg = 57,
     ProofNotFound = 58,
     ProofAlreadyRevoked = 59,
 
@@ -98,13 +98,19 @@ pub enum HarvestaError {
     MaturityYearsMustBePositive = 63,
     SpeciesNotFound = 64,
 
-    // Location / ZK proofs (65-70)
+    // Location / ZK proofs (65-66, 80-81)
     OutsideNigeriaRegion = 65,
-    ProofCommitmentAlreadyRegistered = 66,
-    CommitmentAlreadySubmitted = 67,
-    CommitmentNotFound = 68,
-    CommitmentNotPending = 69,
-    InvalidProof = 70,
+    ProofCommitmentAlreadyReg = 66,
+    CommitmentNotPending = 80,
+    InvalidProof = 81,
+
+    // Farmer registry validator gates (67-68)
+    NotValidator = 67,
+    HashMismatch = 68,
+
+    // Species policy (69-70)
+    InvasiveSpecies = 69,
+    HighWaterUse = 70,
 
     // Donation escrow (71-79)
     AlreadyProcessed = 71,
@@ -113,17 +119,21 @@ pub enum HarvestaError {
     DonationCancelled = 74,
     IntervalNotElapsed = 75,
     ProjectNotRegistered = 76,
-    AmountPerIntervalMustBePositive = 77,
-    IntervalSecondsMustBePositive = 78,
+    AmountPerIntervalMustBePos = 77,
+    IntervalSecondsMustBePos = 78,
     RecurringDonationNotFound = 79,
-
-    // Arithmetic overflows (80-81)
-    TreeTokenMintOverflow = 80,
-    TokenUnitOverflow = 81,
 
     // Donation escrow auto-refund (#634) (82-83)
     MilestoneDeadlineNotPassed = 82,
     LocationAlreadyVerified = 83,
+
+    // ZK location verifier (84-85)
+    CommitmentAlreadySubmitted = 84,
+    CommitmentNotFound = 85,
+
+    // Arithmetic overflows (86-87)
+    TreeTokenMintOverflow = 86,
+    TokenUnitOverflow = 87,
 
     // Verifier staking (91-95)
     MinStakeMustBePositive = 91,
@@ -132,12 +142,19 @@ pub enum HarvestaError {
     SlashExceedsStake = 94,
     InsufficientStake = 95,
 
-    // Carbon credit marketplace (101-107)
-    ListingAmountMustBePositive = 101,
-    PriceMustBePositive = 102,
-    ListingNotFound = 103,
-    ListingNotActive = 104,
+    // Carbon marketplace (100-113)
+    ListingAmountMustBePositive = 100,
+    PriceMustBePositive = 101,
+    ListingNotFound = 102,
+    ListingNotActive = 103,
+    InsufficientLiquidity = 104,
     BuyAmountMustBePositive = 105,
-    InsufficientLiquidity = 106,
-    SelfTrade = 107,
+    SelfTrade = 106,
+    InvalidPriceRange = 107,
+    InvalidDecayRate = 108,
+    InvalidDuration = 109,
+    AuctionNotFound = 110,
+    AuctionNotActive = 111,
+    AuctionExpired = 112,
+    BidBelowReservePrice = 113,
 }
