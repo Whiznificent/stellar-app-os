@@ -21,7 +21,9 @@ members = [
     "platform-governance",
     "subscription-sponsorship",
     "planter-registry",
+    "nft-certificate",
     "sponsor-receipt",
+    "carbon-marketplace",
     "tree-registry",
 ]
 resolver = "2"
