@@ -282,6 +282,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "carbon-marketplace"
+version = "0.1.0"
+dependencies = [
+ "admin-controls",
+ "harvesta-errors",
+name = "carbon-credits"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk 21.7.7",
+]
+
+[[package]]
 name = "cc"
 version = "1.2.61"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -645,6 +657,7 @@ checksum = "2bfcf67fea2815c2fc3b90873fae90957be12ff417335dfadc7f52927feb03b2"
 name = "escrow"
 version = "0.1.0"
 dependencies = [
+ "admin-controls",
  "soroban-sdk 21.7.7",
 ]
 
@@ -667,6 +680,7 @@ checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 name = "farmer-registry"
 version = "0.1.0"
 dependencies = [
+ "admin-controls",
  "harvesta-errors",
  "soroban-sdk 21.7.7",
 ]
@@ -1099,6 +1113,7 @@ dependencies = [
 name = "planter-registry"
 version = "0.1.0"
 dependencies = [
+ "admin-controls",
  "soroban-sdk 21.7.7",
 ]
 
@@ -1902,6 +1917,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "sponsor-receipt"
+version = "0.1.0"
+dependencies = [
+ "contract-utils",
+ "soroban-sdk 21.7.7",
+]
+
+[[package]]
 name = "static_assertions"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2080,6 +2103,15 @@ dependencies = [
  "contract-utils",
  "harvesta-errors",
  "proptest",
+ "soroban-sdk 21.7.7",
+]
+
+[[package]]
+name = "tree-registry"
+version = "0.1.0"
+dependencies = [
+ "contract-utils",
+ "harvesta-errors",
  "soroban-sdk 21.7.7",
 ]
 
